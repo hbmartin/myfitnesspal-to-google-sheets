@@ -3,36 +3,55 @@ import pygsheets
 import myfitnesspal
 
 FMT = "%Y-%m-%d"
-
-gc = pygsheets.authorize()
-wks = gc.open("MFP")[0]
-last_cell = wks.get_values(
-    start=(1, 1), end=(wks.rows, 1), returnas="cell", include_tailing_empty=False
-)[-1][0]
-row = last_cell.row
-last_date = datetime.strptime(last_cell.value, FMT)
-
-headers = last_cell = wks.get_values(
-    start=(1, 1), end=(1, wks.cols), returnas="cell", include_tailing_empty=False
-)[0]
-nutr_to_column = {}
-for h in headers:
-    nutr_to_column[h.value] = h.col - 1
-
-date_range = [
-    datetime.fromordinal(i)
-    for i in range(
-        (last_date + timedelta(days=1)).toordinal(), datetime.today().toordinal()
-    )
-]
-
 client = myfitnesspal.Client("HaroldMartin128")
-for day in date_range:
-    row += 1
-    nutrs = [None] * len(nutr_to_column)
-    nutrs[0] = day.strftime(FMT)
-    mfp_nutrs = client.get_date(day)
-    for nutrient, amount in mfp_nutrs.totals.items():
-        if nutrient in nutr_to_column:
-            nutrs[nutr_to_column[nutrient]] = amount
-    wks.update_values((row, 1), [nutrs])
+gc = pygsheets.authorize()
+
+
+def __date_range(start, end=datetime.today()):
+    return [datetime.fromordinal(i) for i in range(start.toordinal(), end.toordinal())]
+
+
+def __get_col(wks, index):
+    return wks.get_values(
+        start=(1, index),
+        end=(wks.rows, index),
+        returnas="cell",
+        include_tailing_empty=False,
+    )
+
+
+def __get_row(wks, index):
+    return wks.get_values(
+        start=(index, 1),
+        end=(index, wks.cols),
+        returnas="cell",
+        include_tailing_empty=False,
+    )
+
+
+def __row_to_col_index_dict(headers):
+    return {h.value: h.col - 1 for h in headers}
+
+
+def update_sheet_from_mfp(username):
+    wks = gc.open("MFP/" + username)[0]
+    # TODO: detect if sheet exists
+
+    last_cell = __get_col(wks, 1)[-1][0]
+    row = last_cell.row
+    last_date = datetime.strptime(last_cell.value, FMT)
+
+    nutr_to_column = __row_to_col_index_dict(__get_row(wks, 1)[0])
+
+    for day in __date_range(last_date + timedelta(days=1)):
+        row += 1
+        nutrs = [None] * len(nutr_to_column)
+        nutrs[0] = day.strftime(FMT)
+        mfp_nutrs = client.get_date(day, username=username)
+        for nutrient, amount in mfp_nutrs.totals.items():
+            if nutrient in nutr_to_column:
+                nutrs[nutr_to_column[nutrient]] = amount
+        wks.update_values((row, 1), [nutrs])
+
+
+update_sheet_from_mfp("HaroldMartin128")
