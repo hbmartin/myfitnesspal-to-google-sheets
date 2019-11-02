@@ -5,6 +5,6 @@ python:
 
 script:
     - pip install .
-    - pip install black
+    - pip install black mypy
     - black --check src/
     - mypy src/
